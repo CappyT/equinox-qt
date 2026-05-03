@@ -64,6 +64,17 @@ unix:if(!macx|disable-prebuilts) {
     # Phase 3 packaging will set the proper install RPATH instead.
     LIBS += -ldl
 
+    # Equinox: opt-in dlmopen mode for MlcWrapper. When enabled, the wrapper
+    # loads libmoonlight-common-c-bundled.so (built by
+    # tests/mlc-wrapper/Makefile target `bundled`, requires the static
+    # OpenSSL produced by build-openssl-static.sh) into a fresh ELF namespace
+    # via dlmopen LM_ID_NEWLM. This is the gating prerequisite for V1 dual
+    # session support. Off by default; toggle with `qmake6 CONFIG+=equinox-dlmopen`.
+    equinox-dlmopen {
+        message(Equinox: enabling MlcWrapper dlmopen mode (bundled .so required))
+        DEFINES += MLCWRAPPER_USE_DLMOPEN
+    }
+
     # We have our own optimized libopus.a for Steam Link
     if(!config_SL|disable-prebuilts) {
         PKGCONFIG += opus

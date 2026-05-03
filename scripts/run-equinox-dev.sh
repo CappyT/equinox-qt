@@ -18,8 +18,19 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SO_DIR="$REPO/tests/mlc-wrapper"
 BIN="$REPO/app/moonlight"
 
-# Ensure the .so is built (Makefile is incremental; no-op if up to date).
-make -s -C "$SO_DIR" libmoonlight-common-c.so
+# Detect at runtime which .so the binary was built to consume. DLMOPEN mode
+# bakes "libmoonlight-common-c-bundled.so" as the default ctor argument inside
+# MlcWrapper, static-link mode bakes "libmoonlight-common-c.so".
+# Use grep -a directly on the binary (treat as text) instead of `strings|grep`
+# because the latter trips set -o pipefail when grep -q exits early.
+if grep -aFq "libmoonlight-common-c-bundled.so" "$BIN"; then
+    SO_TARGET=libmoonlight-common-c-bundled.so
+    echo "==> Detected DLMOPEN mode -- ensuring $SO_TARGET is built"
+else
+    SO_TARGET=libmoonlight-common-c.so
+    echo "==> Detected static-link mode -- ensuring $SO_TARGET is built"
+fi
+make -s -C "$SO_DIR" "$SO_TARGET"
 
 if [[ ! -x "$BIN" ]]; then
     echo "$BIN missing or not executable. Run 'qmake6 moonlight-qt.pro && make -j\$(nproc) release' first." >&2

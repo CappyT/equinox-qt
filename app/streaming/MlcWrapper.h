@@ -36,7 +36,19 @@
 
 class MlcWrapper {
 public:
-    explicit MlcWrapper(const std::string& libPath = "libmoonlight-common-c.so");
+    // The default library path differs by build mode: in static-link mode
+    // (default) the argument is ignored entirely; in dlmopen mode we point at
+    // the bundled shared object that has OpenSSL statically embedded
+    // (libmoonlight-common-c-bundled.so), because loading the regular
+    // libmoonlight-common-c.so via dlmopen segfaults inside OpenSSL init
+    // (see docs/phase-1/progress.md section 11).
+    explicit MlcWrapper(const std::string& libPath =
+#ifdef MLCWRAPPER_USE_DLMOPEN
+        "libmoonlight-common-c-bundled.so"
+#else
+        "libmoonlight-common-c.so"
+#endif
+    );
     ~MlcWrapper();
 
     MlcWrapper(const MlcWrapper&)            = delete;
