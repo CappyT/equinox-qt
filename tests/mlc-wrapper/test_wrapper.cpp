@@ -33,6 +33,10 @@
 
 #include "MlcWrapper.h"
 
+#ifndef MLC_PATH
+#define MLC_PATH "./libmoonlight-common-c.so"
+#endif
+
 namespace {
 
 #define PASS(name)        do { std::printf("[PASS] %s\n", name); return 0; } while (0)
@@ -43,7 +47,7 @@ int test_construct_and_destruct()
 {
     const char* name = "construct_and_destruct";
     try {
-        MlcWrapper w("./libmoonlight-common-c.so");
+        MlcWrapper w(MLC_PATH);
         if (!w.rawHandle()) FAIL(name, "rawHandle() returned null after ctor");
     }
     catch (const std::exception& e) {
@@ -56,8 +60,8 @@ int test_dual_wrapper_isolation()
 {
     const char* name = "dual_wrapper_isolation";
     try {
-        MlcWrapper a("./libmoonlight-common-c.so");
-        MlcWrapper b("./libmoonlight-common-c.so");
+        MlcWrapper a(MLC_PATH);
+        MlcWrapper b(MLC_PATH);
 
         // Resolve a representative extern global from each handle directly.
         // The wrapper does not expose globals (only Li* functions) so use
@@ -86,7 +90,7 @@ int test_stage_name_works()
 {
     const char* name = "stage_name_works";
     try {
-        MlcWrapper w("./libmoonlight-common-c.so");
+        MlcWrapper w(MLC_PATH);
 
         // STAGE_NONE = 0 in moonlight-common-c. The library returns a non-null
         // human-readable string for any valid stage; test a couple.
@@ -108,8 +112,8 @@ int test_micros_monotonic_per_wrapper()
 {
     const char* name = "micros_monotonic_per_wrapper";
     try {
-        MlcWrapper a("./libmoonlight-common-c.so");
-        MlcWrapper b("./libmoonlight-common-c.so");
+        MlcWrapper a(MLC_PATH);
+        MlcWrapper b(MLC_PATH);
 
         uint64_t a0 = a.getMicroseconds();
         uint64_t b0 = b.getMicroseconds();

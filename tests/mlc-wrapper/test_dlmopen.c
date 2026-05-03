@@ -34,7 +34,21 @@
 #include <stdint.h>
 #include <unistd.h>
 
+#ifndef MLC_PATH
 #define MLC_PATH "./libmoonlight-common-c.so"
+#endif
+
+/* Basename used to grep /proc/self/maps; derived at compile time so the
+ * count check works for both libmoonlight-common-c.so and the bundled
+ * variant libmoonlight-common-c-bundled.so. Override via -DMLC_LIBNAME=... */
+#ifndef MLC_LIBNAME
+#define MLC_LIBNAME "libmoonlight-common-c.so"
+#endif
+
+/* When OpenSSL is statically embedded in the .so (bundled mode), libssl.so
+ * and libcrypto.so should NOT be pulled into the dlmopen namespace.
+ * The test asserts on the OPPOSITE expectation when this define is set. */
+/* #define MLC_BUNDLED_OPENSSL  -- defined by the Makefile bundled target */
 
 typedef void (*li_init_sc_t)(void *);
 
@@ -191,18 +205,28 @@ static int test_openssl_libs_isolated(void)
         FAIL(name, "dlmopen: %s", err ? err : "(null)");
     }
 
-    int mlc_delta    = count_loaded_lib("libmoonlight-common-c.so") - mlc_before;
-    int libssl_delta = count_loaded_lib("libssl.so")                - libssl_before;
-    int libcryp_delta = count_loaded_lib("libcrypto.so")            - libcryp_before;
+    int mlc_delta    = count_loaded_lib(MLC_LIBNAME)     - mlc_before;
+    int libssl_delta = count_loaded_lib("libssl.so")     - libssl_before;
+    int libcryp_delta = count_loaded_lib("libcrypto.so") - libcryp_before;
 
     dlclose(h1); dlclose(h2);
 
     printf("    delta after 2 dlmopens: mlc=%+d  libssl=%+d  libcrypto=%+d\n",
            mlc_delta, libssl_delta, libcryp_delta);
 
-    if (mlc_delta != 2)     FAIL(name, "mlc grew by %d (expected +2)", mlc_delta);
+    if (mlc_delta != 2)     FAIL(name, "%s grew by %d (expected +2)", MLC_LIBNAME, mlc_delta);
+
+#ifdef MLC_BUNDLED_OPENSSL
+    /* With OpenSSL statically embedded in the .so, no external libssl/libcrypto
+     * should be pulled into the dlmopen namespace -- that is precisely the
+     * isolation property we want for V1 dual-session. */
+    if (libssl_delta != 0)  FAIL(name, "libssl grew by %d in bundled mode (expected 0)", libssl_delta);
+    if (libcryp_delta != 0) FAIL(name, "libcrypto grew by %d in bundled mode (expected 0)", libcryp_delta);
+#else
+    /* Vanilla mode: each dlmopen brings its own libssl/libcrypto from /lib64. */
     if (libssl_delta != 2)  FAIL(name, "libssl grew by %d (expected +2)", libssl_delta);
     if (libcryp_delta != 2) FAIL(name, "libcrypto grew by %d (expected +2)", libcryp_delta);
+#endif
     PASS(name);
 }
 
