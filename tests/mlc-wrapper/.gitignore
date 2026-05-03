@@ -1,4 +1,9 @@
 libmoonlight-common-c.so
+libmoonlight-common-c-bundled.so
 test_dlmopen
+test_dlmopen-bundled
 test_wrapper
+test_wrapper-bundled
 *.o
+openssl-static/
+.openssl-src/
