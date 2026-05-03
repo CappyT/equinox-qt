@@ -46,9 +46,11 @@ MLC_SOURCES := \
   $(MLC)/src/SimpleStun.c $(MLC)/src/VideoDepacketizer.c \
   $(MLC)/src/VideoStream.c
 
+APP_DIR := $(REPO)/app/streaming
+
 .PHONY: all test clean
 
-all: libmoonlight-common-c.so test_dlmopen
+all: libmoonlight-common-c.so test_dlmopen test_wrapper
 
 libmoonlight-common-c.so: $(MLC_SOURCES)
 	@echo "==> Building $@"
@@ -58,9 +60,18 @@ test_dlmopen: test_dlmopen.c
 	@echo "==> Building $@"
 	gcc -O2 -Wall -Wextra -o $@ $< -ldl
 
+test_wrapper: test_wrapper.cpp $(APP_DIR)/MlcWrapper.cpp $(APP_DIR)/MlcWrapper.h
+	@echo "==> Building $@"
+	g++ -O2 -Wall -Wextra -std=c++17 \
+	  -I$(APP_DIR) -I$(MLC)/src \
+	  -o $@ test_wrapper.cpp $(APP_DIR)/MlcWrapper.cpp -ldl
+
 test: all
-	@echo "==> Running tests"
+	@echo "==> Running test_dlmopen (C, dlmopen mechanics)"
 	@LD_LIBRARY_PATH=. ./test_dlmopen
+	@echo
+	@echo "==> Running test_wrapper (C++, MlcWrapper API)"
+	@LD_LIBRARY_PATH=. ./test_wrapper
 
 clean:
-	rm -f libmoonlight-common-c.so test_dlmopen
+	rm -f libmoonlight-common-c.so test_dlmopen test_wrapper

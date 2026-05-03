@@ -1,3 +1,4 @@
 libmoonlight-common-c.so
 test_dlmopen
+test_wrapper
 *.o

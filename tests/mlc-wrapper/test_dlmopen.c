@@ -24,7 +24,9 @@
  * Exit code: 0 when all tests pass, 1 otherwise.
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
