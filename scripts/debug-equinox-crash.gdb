@@ -7,10 +7,6 @@ set print address on
 set print pretty on
 set demangle-style auto
 set auto-solib-add on
-
-# CRITICAL: __libc_message and abort live in libc.so which is not loaded yet
-# when gdb processes this file. Make the breakpoints pending so gdb accepts
-# them now and resolves them at run time when libc gets mapped.
 set breakpoint pending on
 
 # Mirror everything to a file for offline analysis.
@@ -19,40 +15,44 @@ set logging redirect on
 set logging overwrite on
 set logging enabled on
 
-# Don't choke on SIGPIPE (mlc + sockets), but stop on SIGABRT/SIGSEGV.
+# Don't choke on SIGPIPE (mlc + sockets), stop on SIGABRT/SIGSEGV but
+# DO NOT pass them to the inferior so the process stays alive long
+# enough for us to inspect it.
 handle SIGPIPE nostop noprint pass
-handle SIGSEGV stop print pass
-handle SIGABRT stop print pass
+handle SIGABRT stop print nopass
+handle SIGSEGV stop print nopass
 
-# glibc invokes __libc_message when it detects heap corruption (e.g. invalid
-# free, double free) before calling abort(). Catching it gives us the exact
-# stack frame WHERE the bad pointer is being freed, in addition to the
-# eventual abort() backtrace.
-break __libc_message
+# glibc prints messages like 'free(): invalid pointer' from malloc_printerr
+# right before raising SIGABRT. Catching it gives us the EXACT stack frame
+# where the bad free is happening.
+break malloc_printerr
 commands
   printf "\n\n=================================================================\n"
-  printf "========== __libc_message hit (glibc heap corruption) ==========\n"
+  printf "========== malloc_printerr (glibc heap corruption) =============\n"
   printf "=================================================================\n\n"
-  printf "[arg1 / message string]:\n"
-  x/s $rsi
+  printf "[message]:\n"
+  x/s $rdi
   printf "\n[backtrace -- current thread]:\n"
   bt full 60
   printf "\n[info threads]:\n"
   info threads
-  printf "\n[backtrace -- all threads (top 30)]:\n"
+  printf "\n[backtrace -- all threads (top 30 frames each)]:\n"
   thread apply all bt 30
-  printf "\n[info sharedlibrary]:\n"
+  printf "\n[info sharedlibrary -- pay attention to libmoonlight-common-c]:\n"
   info sharedlibrary
-  printf "\n=== continuing to abort() to capture the eventual signal ===\n"
+  printf "\n[/proc/<pid>/maps -- text segments only]:\n"
+  shell awk '$2 ~ /x/ {print $1, $6}' /proc/$(pgrep -f equinox-qt/app/moonlight | head -1)/maps 2>/dev/null | head -60
+  printf "\n=== continuing past malloc_printerr to let SIGABRT raise ===\n"
   continue
 end
 
-# Catch the eventual abort() too, so we have the stack even if libc_message
-# was missed (e.g. different glibc version or compiled out).
-break abort
+# When the abort() actually fires, catch the signal cleanly. Use
+# catch signal SIGABRT (catchpoint) instead of `break abort` because
+# the latter resolves to many symbols (e.g. QAbstractSocket::abort()).
+catch signal SIGABRT
 commands
   printf "\n\n=================================================================\n"
-  printf "========== abort() reached ==========\n"
+  printf "========== SIGABRT caught ==========\n"
   printf "=================================================================\n\n"
   printf "[backtrace -- current thread]:\n"
   bt full 60
@@ -63,12 +63,13 @@ commands
   quit
 end
 
-# Some heap corruption paths go through __assert_fail; catch that too.
-break __assert_fail
+catch signal SIGSEGV
 commands
-  printf "\n========== __assert_fail hit ==========\n"
-  bt full 30
-  continue
+  printf "\n========== SIGSEGV caught ==========\n"
+  bt full 60
+  thread apply all bt 50
+  detach
+  quit
 end
 
 run
