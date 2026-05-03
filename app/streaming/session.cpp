@@ -1,4 +1,5 @@
 #include "session.h"
+#include "MlcWrapper.h"
 #include "settings/streamingpreferences.h"
 #include "streaming/streamutils.h"
 #include "backend/richpresencemanager.h"
@@ -632,7 +633,23 @@ bool Session::initialize(QQuickWindow* qtWindow)
         return false;
     }
 
-    LiInitializeStreamConfiguration(&m_StreamConfig);
+    // Open an isolated dlmopen handle to libmoonlight-common-c.so. Each
+    // Session owns its own handle so two concurrent sessions get
+    // ELF-namespace-isolated copies of the protocol library state. See
+    // docs/audit/session-refactor-scope.md and MlcWrapper.h.
+    try {
+        m_Mlc = std::make_unique<MlcWrapper>();
+    }
+    catch (const std::exception& e) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                     "Failed to load moonlight-common-c shared library: %s",
+                     e.what());
+        emitLaunchWarning(QString("Failed to load moonlight-common-c shared library: %1").arg(e.what()));
+        SDL_QuitSubSystem(SDL_INIT_VIDEO);
+        return false;
+    }
+
+    m_Mlc->initializeStreamConfiguration(&m_StreamConfig);
     m_StreamConfig.width = m_Preferences->width;
     m_StreamConfig.height = m_Preferences->height;
 
@@ -652,7 +669,7 @@ bool Session::initialize(QQuickWindow* qtWindow)
     qInfo() << "Server GPU:" << m_Computer->gpuModel;
     qInfo() << "Server GFE version:" << m_Computer->gfeVersion;
 
-    LiInitializeVideoCallbacks(&m_VideoCallbacks);
+    m_Mlc->initializeVideoCallbacks(&m_VideoCallbacks);
     m_VideoCallbacks.setup = drSetup;
 
     m_StreamConfig.fps = m_Preferences->fps;
@@ -694,7 +711,7 @@ bool Session::initialize(QQuickWindow* qtWindow)
         break;
     }
 
-    LiInitializeAudioCallbacks(&m_AudioCallbacks);
+    m_Mlc->initializeAudioCallbacks(&m_AudioCallbacks);
     m_AudioCallbacks.init = arInit;
     m_AudioCallbacks.cleanup = arCleanup;
     m_AudioCallbacks.decodeAndPlaySample = arDecodeAndPlaySample;

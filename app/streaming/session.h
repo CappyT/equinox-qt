@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include <QSemaphore>
 #include <QQuickWindow>
 
@@ -10,6 +12,8 @@
 #include "video/decoder.h"
 #include "audio/renderers/renderer.h"
 #include "video/overlaymanager.h"
+
+class MlcWrapper;
 
 class SupportedVideoFormatList : public QList<int>
 {
@@ -280,6 +284,14 @@ private:
     Uint32 m_DropAudioEndTime;
 
     Overlay::OverlayManager m_OverlayManager;
+
+    // Per-session shim around moonlight-common-c. Constructed in initialize()
+    // via dlmopen(LM_ID_NEWLM, ...) so two concurrent Sessions (V1 dual-stream)
+    // get ELF-namespace-isolated copies of the protocol library's globals,
+    // libssl, libcrypto, and libc. Direct Li* calls are being migrated to go
+    // through this wrapper so the s_ActiveSession singleton can eventually be
+    // dropped.
+    std::unique_ptr<MlcWrapper> m_Mlc;
 
     static CONNECTION_LISTENER_CALLBACKS k_ConnCallbacks;
     static Session* s_ActiveSession;

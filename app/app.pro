@@ -59,6 +59,9 @@ unix:if(!macx|disable-prebuilts) {
 
     # Equinox: MlcWrapper uses dlmopen(LM_ID_NEWLM, ...) to load
     # moonlight-common-c into an isolated ELF namespace. Always link libdl.
+    # Runtime path resolution for libmoonlight-common-c.so is handled by
+    # the dev launcher (scripts/run-equinox-dev.sh) via LD_LIBRARY_PATH;
+    # Phase 3 packaging will set the proper install RPATH instead.
     LIBS += -ldl
 
     # We have our own optimized libopus.a for Steam Link
