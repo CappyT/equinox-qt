@@ -20,7 +20,7 @@ endif
 MLC  := $(REPO)/moonlight-common-c/moonlight-common-c
 ENET := $(MLC)/enet
 
-CFLAGS := -O2 -std=gnu99 -fPIC \
+CFLAGS := -O2 -g -std=gnu99 -fPIC \
   -I$(ENET)/include -I$(MLC)/src \
   -I$(MLC)/nanors -I$(MLC)/nanors/deps -I$(MLC)/nanors/deps/obl \
   -DHAS_SOCKLEN_T -DHAVE_CLOCK_GETTIME=1 \
