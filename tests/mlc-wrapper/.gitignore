@@ -1,0 +1,3 @@
+libmoonlight-common-c.so
+test_dlmopen
+*.o
