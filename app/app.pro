@@ -57,6 +57,10 @@ unix:if(!macx|disable-prebuilts) {
     CONFIG += link_pkgconfig
     PKGCONFIG += openssl sdl2 SDL2_ttf
 
+    # Equinox: MlcWrapper uses dlmopen(LM_ID_NEWLM, ...) to load
+    # moonlight-common-c into an isolated ELF namespace. Always link libdl.
+    LIBS += -ldl
+
     # We have our own optimized libopus.a for Steam Link
     if(!config_SL|disable-prebuilts) {
         PKGCONFIG += opus
@@ -184,6 +188,7 @@ SOURCES += \
     streaming/input/mouse.cpp \
     streaming/input/reltouch.cpp \
     streaming/session.cpp \
+    streaming/MlcWrapper.cpp \
     streaming/audio/audio.cpp \
     streaming/audio/renderers/sdlaud.cpp \
     gui/computermodel.cpp \
@@ -221,6 +226,7 @@ HEADERS += \
     settings/streamingpreferences.h \
     streaming/input/input.h \
     streaming/session.h \
+    streaming/MlcWrapper.h \
     streaming/audio/renderers/renderer.h \
     streaming/audio/renderers/sdl.h \
     gui/computermodel.h \
