@@ -26,4 +26,10 @@ if [[ ! -x "$BIN" ]]; then
     exit 1
 fi
 
-exec env LD_LIBRARY_PATH="$SO_DIR${LD_LIBRARY_PATH+:$LD_LIBRARY_PATH}" "$BIN" "$@"
+# OPENSSL_CONF=/dev/null tells the libcrypto loaded inside the dlmopen
+# namespace to skip its config-file init, which is the path that segfaults
+# inside ERR_set_mark when two libcrypto instances co-exist in the same
+# process. See docs/phase-1/progress.md for the diagnosis.
+exec env LD_LIBRARY_PATH="$SO_DIR${LD_LIBRARY_PATH+:$LD_LIBRARY_PATH}" \
+         OPENSSL_CONF=/dev/null \
+         "$BIN" "$@"
