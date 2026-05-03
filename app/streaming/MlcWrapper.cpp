@@ -1,5 +1,26 @@
 /*
  * MlcWrapper.cpp -- see MlcWrapper.h for design notes.
+ *
+ * IMPORTANT NOTE ON THE CURRENT BUILD MODE
+ * ----------------------------------------
+ * Real-host streaming on Fedora 43 / glibc 2.42 / OpenSSL 3.5 SIGSEGVs
+ * inside libcrypto's lazy OPENSSL_init_crypto chain when libmoonlight-common-c
+ * is loaded via dlmopen(LM_ID_NEWLM, ...) -- the second libcrypto.so instance
+ * in the process trips on OpenSSL's per-process TLS / config-loading state
+ * during init (full diagnosis: docs/phase-1/progress.md, the captures under
+ * /tmp/equinox-debug/, and the env-var workaround OPENSSL_CONF=/dev/null does
+ * not help because the same path runs even with no config file).
+ *
+ * As a result the wrapper currently builds in STATIC-LINK MODE: the function
+ * pointer table is populated from the directly-linked Li* symbols (the
+ * still-present libmoonlight-common-c.a), no dlmopen happens at runtime, and
+ * each Session shares the singleton mlc state. This restores a working
+ * single-session app and preserves the call-site migration in session.cpp /
+ * input/*.cpp so future re-enablement of dlmopen is a one-line flip.
+ *
+ * To re-enable DLMOPEN MODE for the spike branch that solves OpenSSL
+ * embedding (build mlc.so with libcrypto statically linked into it), define
+ * MLCWRAPPER_USE_DLMOPEN at compile time.
  */
 
 #ifndef _GNU_SOURCE
@@ -15,6 +36,10 @@
 #define RESOLVE(NAME) \
     m_p##NAME = reinterpret_cast<decltype(m_p##NAME)>(resolveOrThrow(#NAME))
 
+// Static-link mode shortcut: take the address of the linker-resolved Li* symbol.
+#define BIND_STATIC(NAME) \
+    m_p##NAME = reinterpret_cast<decltype(m_p##NAME)>(&::NAME)
+
 MlcWrapper::MlcWrapper(const std::string& libPath)
     : m_handle(nullptr)
 {
@@ -23,6 +48,8 @@ MlcWrapper::MlcWrapper(const std::string& libPath)
 
 MlcWrapper::~MlcWrapper()
 {
+    // Only call dlclose in dlmopen mode; in static-link mode m_handle stays
+    // nullptr and the binding is just a function-pointer assignment.
     if (m_handle) {
         dlclose(m_handle);
         m_handle = nullptr;
@@ -31,6 +58,7 @@ MlcWrapper::~MlcWrapper()
 
 void MlcWrapper::load(const std::string& libPath)
 {
+#ifdef MLCWRAPPER_USE_DLMOPEN
     // LM_ID_NEWLM gives this load its own ELF namespace. All transitive
     // dependencies (libc, libssl, libcrypto) are also loaded fresh into the
     // namespace, so the ~29 extern globals in moonlight-common-c plus the
@@ -118,6 +146,57 @@ void MlcWrapper::load(const std::string& libPath)
         m_handle = nullptr;
         throw;
     }
+#else
+    // STATIC-LINK MODE (default): bind directly to the libmoonlight-common-c.a
+    // symbols compiled into the binary. m_handle stays nullptr and dlclose is
+    // a no-op in the destructor. See the file-level comment for why.
+    (void)libPath;
+    m_handle = nullptr;
+
+    BIND_STATIC(LiInitializeStreamConfiguration);
+    BIND_STATIC(LiInitializeVideoCallbacks);
+    BIND_STATIC(LiInitializeAudioCallbacks);
+    BIND_STATIC(LiInitializeConnectionCallbacks);
+    BIND_STATIC(LiStartConnection);
+    BIND_STATIC(LiStopConnection);
+    BIND_STATIC(LiInterruptConnection);
+    BIND_STATIC(LiTestClientConnectivity);
+    BIND_STATIC(LiGetStageName);
+    BIND_STATIC(LiGetPortFlagsFromStage);
+    BIND_STATIC(LiGetPortFlagsFromTerminationErrorCode);
+    BIND_STATIC(LiStringifyPortFlags);
+    BIND_STATIC(LiGetMicroseconds);
+    BIND_STATIC(LiSendKeyboardEvent);
+    BIND_STATIC(LiSendKeyboardEvent2);
+    BIND_STATIC(LiSendMouseButtonEvent);
+    BIND_STATIC(LiSendMouseMoveEvent);
+    BIND_STATIC(LiSendMousePositionEvent);
+    BIND_STATIC(LiSendScrollEvent);
+    BIND_STATIC(LiSendHighResScrollEvent);
+    BIND_STATIC(LiSendHScrollEvent);
+    BIND_STATIC(LiSendHighResHScrollEvent);
+    BIND_STATIC(LiSendTouchEvent);
+    BIND_STATIC(LiSendPenEvent);
+    BIND_STATIC(LiSendMultiControllerEvent);
+    BIND_STATIC(LiSendControllerArrivalEvent);
+    BIND_STATIC(LiSendControllerBatteryEvent);
+    BIND_STATIC(LiSendControllerMotionEvent);
+    BIND_STATIC(LiSendControllerTouchEvent);
+    BIND_STATIC(LiSendUtf8TextEvent);
+    BIND_STATIC(LiWaitForNextVideoFrame);
+    BIND_STATIC(LiPollNextVideoFrame);
+    BIND_STATIC(LiCompleteVideoFrame);
+    BIND_STATIC(LiWakeWaitForVideoFrame);
+    BIND_STATIC(LiRequestIdrFrame);
+    BIND_STATIC(LiGetEstimatedRttInfo);
+    BIND_STATIC(LiGetHdrMetadata);
+    BIND_STATIC(LiGetCurrentHostDisplayHdrMode);
+    BIND_STATIC(LiGetHostFeatureFlags);
+    BIND_STATIC(LiFindExternalAddressIP4);
+    BIND_STATIC(LiGetPendingAudioDuration);
+    BIND_STATIC(LiGetPendingAudioFrames);
+    BIND_STATIC(LiGetLaunchUrlQueryParameters);
+#endif
 }
 
 void* MlcWrapper::resolveOrThrow(const char* symbol) const
