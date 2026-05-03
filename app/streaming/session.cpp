@@ -72,24 +72,24 @@ void Session::clStageStarting(int stage)
     // We know this is called on the same thread as LiStartConnection()
     // which happens to be the main thread, so it's cool to interact
     // with the GUI in these callbacks.
-    emit s_ActiveSession->stageStarting(QString::fromLocal8Bit(LiGetStageName(stage)));
+    emit s_ActiveSession->stageStarting(QString::fromLocal8Bit(s_ActiveSession->m_Mlc->getStageName(stage)));
 }
 
 void Session::clStageFailed(int stage, int errorCode)
 {
     // Perform the port test now, while we're on the async connection thread and not blocking the UI.
-    unsigned int portFlags = LiGetPortFlagsFromStage(stage);
-    s_ActiveSession->m_PortTestResults = LiTestClientConnectivity(CONN_TEST_SERVER, 443, portFlags);
+    unsigned int portFlags = s_ActiveSession->m_Mlc->getPortFlagsFromStage(stage);
+    s_ActiveSession->m_PortTestResults = s_ActiveSession->m_Mlc->testClientConnectivity(CONN_TEST_SERVER, 443, portFlags);
 
     char failingPorts[128];
-    LiStringifyPortFlags(portFlags, ", ", failingPorts, sizeof(failingPorts));
-    emit s_ActiveSession->stageFailed(QString::fromLocal8Bit(LiGetStageName(stage)), errorCode, QString(failingPorts));
+    s_ActiveSession->m_Mlc->stringifyPortFlags(portFlags, ", ", failingPorts, sizeof(failingPorts));
+    emit s_ActiveSession->stageFailed(QString::fromLocal8Bit(s_ActiveSession->m_Mlc->getStageName(stage)), errorCode, QString(failingPorts));
 }
 
 void Session::clConnectionTerminated(int errorCode)
 {
-    unsigned int portFlags = LiGetPortFlagsFromTerminationErrorCode(errorCode);
-    s_ActiveSession->m_PortTestResults = LiTestClientConnectivity(CONN_TEST_SERVER, 443, portFlags);
+    unsigned int portFlags = s_ActiveSession->m_Mlc->getPortFlagsFromTerminationErrorCode(errorCode);
+    s_ActiveSession->m_PortTestResults = s_ActiveSession->m_Mlc->testClientConnectivity(CONN_TEST_SERVER, 443, portFlags);
 
     // Display the termination dialog if this was not intended
     switch (errorCode) {
@@ -101,7 +101,7 @@ void Session::clConnectionTerminated(int errorCode)
 
         char ports[128];
         SDL_assert(portFlags != 0);
-        LiStringifyPortFlags(portFlags, ", ", ports, sizeof(ports));
+        s_ActiveSession->m_Mlc->stringifyPortFlags(portFlags, ", ", ports, sizeof(ports));
         emit s_ActiveSession->displayLaunchError(tr("No video received from host.") + "\n\n"+
                                                  tr("Check your firewall and port forwarding rules for port(s): %1").arg(ports));
         break;
@@ -1283,7 +1283,7 @@ private:
         SDL_assert(m_Session->m_VideoDecoder == nullptr);
 
         // Finish cleanup of the connection state
-        LiStopConnection();
+        m_Session->m_Mlc->stopConnection();
 
         // Perform a best-effort app quit
         if (shouldQuit) {
@@ -1697,9 +1697,9 @@ bool Session::startConnectionAsync()
                                                                          false);
     }
 
-    int err = LiStartConnection(&hostInfo, &m_StreamConfig, &k_ConnCallbacks,
-                                &m_VideoCallbacks, &m_AudioCallbacks,
-                                NULL, 0, NULL, 0);
+    int err = m_Mlc->startConnection(&hostInfo, &m_StreamConfig, &k_ConnCallbacks,
+                                     &m_VideoCallbacks, &m_AudioCallbacks,
+                                     NULL, 0, NULL, 0);
     if (err != 0) {
         // We already displayed an error dialog in the stage failure
         // listener.
@@ -1761,8 +1761,12 @@ void Session::start()
 
 void Session::interrupt()
 {
-    // Stop any connection in progress
-    LiInterruptConnection();
+    // Stop any connection in progress. m_Mlc may still be null if interrupt()
+    // is called before initialize() opened the dlmopen handle (e.g. on
+    // immediate user-cancel from the lobby UI); skip the call in that case.
+    if (m_Mlc) {
+        m_Mlc->interruptConnection();
+    }
 
     // Inject a quit event to our SDL event loop
     SDL_Event event;
@@ -2226,11 +2230,11 @@ void Session::exec()
             }
 
             // Request an IDR frame to complete the reset
-            LiRequestIdrFrame();
+            m_Mlc->requestIdrFrame();
 
             // Set HDR mode. We may miss the callback if we're in the middle
             // of recreating our decoder at the time the HDR transition happens.
-            m_VideoDecoder->setHdrMode(LiGetCurrentHostDisplayHdrMode());
+            m_VideoDecoder->setHdrMode(m_Mlc->getCurrentHostDisplayHdrMode());
 
             // After a window resize, we need to reset the pointer lock region
             m_InputHandler->updatePointerRegionLock();
