@@ -11,3 +11,34 @@ config.tests/*/Makefile
 # Local planning / brainstorming docs not meant for upstream PRs
 /handoff-claude-code.md
 /dual-stream-moonlight-project (equinox).md
+
+# qmake / make build artefacts (these clutter `git status` and were never
+# meant to be committed; upstream's .gitignore does not cover them because
+# the canonical upstream build is out-of-tree).
+/.qmake.cache
+/.qmake.stash
+/Makefile
+/config.log
+/app/Makefile
+/app/Makefile.Debug
+/app/Makefile.Release
+/app/release/
+/app/debug/
+/app/moonlight
+/config.tests/EGL/EGL
+/config.tests/EGL/main.o
+/h264bitstream/Makefile
+/h264bitstream/Makefile.Debug
+/h264bitstream/Makefile.Release
+/h264bitstream/release/
+/h264bitstream/libh264bitstream.a
+/moonlight-common-c/Makefile
+/moonlight-common-c/Makefile.Debug
+/moonlight-common-c/Makefile.Release
+/moonlight-common-c/release/
+/moonlight-common-c/libmoonlight-common-c.a
+/qmdnsengine/Makefile
+/qmdnsengine/Makefile.Debug
+/qmdnsengine/Makefile.Release
+/qmdnsengine/release/
+/qmdnsengine/libqmdnsengine.a
