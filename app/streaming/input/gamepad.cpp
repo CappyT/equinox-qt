@@ -1,4 +1,5 @@
 #include "streaming/session.h"
+#include "streaming/MlcWrapper.h"
 
 #include <Limelight.h>
 #include "SDL_compat.h"
@@ -101,7 +102,7 @@ void SdlInputHandler::sendGamepadState(GamepadState* state)
         }
     }
 
-    LiSendMultiControllerEvent(state->index,
+    m_OwningSession->m_Mlc->sendMultiControllerEvent(state->index,
                                m_GamepadMask,
                                buttons,
                                lt,
@@ -150,7 +151,7 @@ void SdlInputHandler::sendGamepadBatteryState(GamepadState* state, SDL_JoystickP
         return;
     }
 
-    LiSendControllerBatteryEvent(state->index, batteryState, batteryPercentage);
+    m_OwningSession->m_Mlc->sendControllerBatteryEvent(state->index, batteryState, batteryPercentage);
 }
 
 Uint32 SdlInputHandler::mouseEmulationTimerCallback(Uint32 interval, void *param)
@@ -182,7 +183,7 @@ Uint32 SdlInputHandler::mouseEmulationTimerCallback(Uint32 interval, void *param
     deltaY = qAbs(deltaY) > MOUSE_EMULATION_DEADZONE ? deltaY - MOUSE_EMULATION_DEADZONE : 0;
 
     if (deltaX != 0 || deltaY != 0) {
-        LiSendMouseMoveEvent((short)deltaX, (short)deltaY);
+        gamepad->owningHandler->m_OwningSession->m_Mlc->sendMouseMoveEvent((short)deltaX, (short)deltaY);
     }
 
     return interval;
@@ -291,31 +292,31 @@ void SdlInputHandler::handleControllerButtonEvent(SDL_ControllerButtonEvent* eve
         }
         else if (state->mouseEmulationTimer != 0) {
             if (event->button == SDL_CONTROLLER_BUTTON_A) {
-                LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
+                m_OwningSession->m_Mlc->sendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
             }
             else if (event->button == SDL_CONTROLLER_BUTTON_B) {
-                LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
+                m_OwningSession->m_Mlc->sendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
             }
             else if (event->button == SDL_CONTROLLER_BUTTON_X) {
-                LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_MIDDLE);
+                m_OwningSession->m_Mlc->sendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_MIDDLE);
             }
             else if (event->button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER) {
-                LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_X1);
+                m_OwningSession->m_Mlc->sendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_X1);
             }
             else if (event->button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) {
-                LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_X2);
+                m_OwningSession->m_Mlc->sendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_X2);
             }
             else if (event->button == SDL_CONTROLLER_BUTTON_DPAD_UP) {
-                LiSendScrollEvent(1);
+                m_OwningSession->m_Mlc->sendScrollEvent(1);
             }
             else if (event->button == SDL_CONTROLLER_BUTTON_DPAD_DOWN) {
-                LiSendScrollEvent(-1);
+                m_OwningSession->m_Mlc->sendScrollEvent(-1);
             }
             else if (event->button == SDL_CONTROLLER_BUTTON_DPAD_RIGHT) {
-                LiSendHScrollEvent(1);
+                m_OwningSession->m_Mlc->sendHScrollEvent(1);
             }
             else if (event->button == SDL_CONTROLLER_BUTTON_DPAD_LEFT) {
-                LiSendHScrollEvent(-1);
+                m_OwningSession->m_Mlc->sendHScrollEvent(-1);
             }
         }
     }
@@ -330,7 +331,7 @@ void SdlInputHandler::handleControllerButtonEvent(SDL_ControllerButtonEvent* eve
 
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                                 "Mouse emulation deactivated");
-                    Session::get()->notifyMouseEmulationMode(false);
+                    m_OwningSession->notifyMouseEmulationMode(false);
                 }
                 else if (m_GamepadMouse) {
                     // Send the start button up event to the host, since we won't do it below
@@ -340,25 +341,25 @@ void SdlInputHandler::handleControllerButtonEvent(SDL_ControllerButtonEvent* eve
 
                     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                                 "Mouse emulation active");
-                    Session::get()->notifyMouseEmulationMode(true);
+                    m_OwningSession->notifyMouseEmulationMode(true);
                 }
             }
         }
         else if (state->mouseEmulationTimer != 0) {
             if (event->button == SDL_CONTROLLER_BUTTON_A) {
-                LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
+                m_OwningSession->m_Mlc->sendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
             }
             else if (event->button == SDL_CONTROLLER_BUTTON_B) {
-                LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
+                m_OwningSession->m_Mlc->sendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
             }
             else if (event->button == SDL_CONTROLLER_BUTTON_X) {
-                LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_MIDDLE);
+                m_OwningSession->m_Mlc->sendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_MIDDLE);
             }
             else if (event->button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER) {
-                LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_X1);
+                m_OwningSession->m_Mlc->sendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_X1);
             }
             else if (event->button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) {
-                LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_X2);
+                m_OwningSession->m_Mlc->sendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_X2);
             }
         }
     }
@@ -375,7 +376,7 @@ void SdlInputHandler::handleControllerButtonEvent(SDL_ControllerButtonEvent* eve
         SDL_PushEvent(&event);
 
         // Clear buttons down on this gamepad
-        LiSendMultiControllerEvent(state->index, m_GamepadMask,
+        m_OwningSession->m_Mlc->sendMultiControllerEvent(state->index, m_GamepadMask,
                                    0, 0, 0, 0, 0, 0, 0);
         return;
     }
@@ -386,11 +387,11 @@ void SdlInputHandler::handleControllerButtonEvent(SDL_ControllerButtonEvent* eve
                     "Detected stats toggle gamepad combo");
 
         // Toggle the stats overlay
-        Session::get()->getOverlayManager().setOverlayState(Overlay::OverlayDebug,
-                                                            !Session::get()->getOverlayManager().isOverlayEnabled(Overlay::OverlayDebug));
+        m_OwningSession->getOverlayManager().setOverlayState(Overlay::OverlayDebug,
+                                                            !m_OwningSession->getOverlayManager().isOverlayEnabled(Overlay::OverlayDebug));
 
         // Clear buttons down on this gamepad
-        LiSendMultiControllerEvent(state->index, m_GamepadMask,
+        m_OwningSession->m_Mlc->sendMultiControllerEvent(state->index, m_GamepadMask,
                                    0, 0, 0, 0, 0, 0, 0);
         return;
     }
@@ -418,7 +419,7 @@ void SdlInputHandler::handleControllerSensorEvent(SDL_ControllerSensorEvent* eve
             memcpy(state->lastAccelEventData, event->data, sizeof(event->data));
             state->lastAccelEventTime = event->timestamp;
 
-            LiSendControllerMotionEvent((uint8_t)state->index, LI_MOTION_TYPE_ACCEL, event->data[0], event->data[1], event->data[2]);
+            m_OwningSession->m_Mlc->sendControllerMotionEvent((uint8_t)state->index, LI_MOTION_TYPE_ACCEL, event->data[0], event->data[1], event->data[2]);
         }
         break;
     case SDL_SENSOR_GYRO:
@@ -429,7 +430,7 @@ void SdlInputHandler::handleControllerSensorEvent(SDL_ControllerSensorEvent* eve
             state->lastGyroEventTime = event->timestamp;
 
             // Convert rad/s to deg/s
-            LiSendControllerMotionEvent((uint8_t)state->index, LI_MOTION_TYPE_GYRO,
+            m_OwningSession->m_Mlc->sendControllerMotionEvent((uint8_t)state->index, LI_MOTION_TYPE_GYRO,
                                         event->data[0] * 57.2957795f,
                                         event->data[1] * 57.2957795f,
                                         event->data[2] * 57.2957795f);
@@ -460,7 +461,7 @@ void SdlInputHandler::handleControllerTouchpadEvent(SDL_ControllerTouchpadEvent*
         return;
     }
 
-    LiSendControllerTouchEvent((uint8_t)state->index, eventType, event->finger, event->x, event->y, event->pressure);
+    m_OwningSession->m_Mlc->sendControllerTouchEvent((uint8_t)state->index, eventType, event->finger, event->x, event->y, event->pressure);
 }
 
 #endif
@@ -708,7 +709,7 @@ void SdlInputHandler::handleControllerDeviceEvent(SDL_ControllerDeviceEvent* eve
 #endif
             type == LI_CTYPE_PS;
 
-        LiSendControllerArrivalEvent(state->index, m_GamepadMask, type, supportedButtonFlags, capabilities);
+        m_OwningSession->m_Mlc->sendControllerArrivalEvent(state->index, m_GamepadMask, type, supportedButtonFlags, capabilities);
 #else
 
         // Send an empty event to tell the PC we've arrived
@@ -724,7 +725,7 @@ void SdlInputHandler::handleControllerDeviceEvent(SDL_ControllerDeviceEvent* eve
         state = findStateForGamepad(event->which);
         if (state != NULL) {
             if (state->mouseEmulationTimer != 0) {
-                Session::get()->notifyMouseEmulationMode(false);
+                m_OwningSession->notifyMouseEmulationMode(false);
                 SDL_RemoveTimer(state->mouseEmulationTimer);
             }
 
@@ -750,7 +751,7 @@ void SdlInputHandler::handleControllerDeviceEvent(SDL_ControllerDeviceEvent* eve
                         state->index);
 
             // Send a final event to let the PC know this gamepad is gone
-            LiSendMultiControllerEvent(state->index, m_GamepadMask,
+            m_OwningSession->m_Mlc->sendMultiControllerEvent(state->index, m_GamepadMask,
                                        0, 0, 0, 0, 0, 0, 0);
 
             // Clear all remaining state from this slot

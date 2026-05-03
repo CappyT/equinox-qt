@@ -1,6 +1,7 @@
 #include <Limelight.h>
 #include "SDL_compat.h"
 #include "streaming/session.h"
+#include "streaming/MlcWrapper.h"
 #include "settings/mappingmanager.h"
 #include "path.h"
 #include "utils.h"
@@ -9,8 +10,11 @@
 #include <QDir>
 #include <QGuiApplication>
 
-SdlInputHandler::SdlInputHandler(StreamingPreferences& prefs, int streamWidth, int streamHeight)
-    : m_MultiController(prefs.multiController),
+SdlInputHandler::SdlInputHandler(Session* owningSession,
+                                 StreamingPreferences& prefs,
+                                 int streamWidth, int streamHeight)
+    : m_OwningSession(owningSession),
+      m_MultiController(prefs.multiController),
       m_GamepadMouse(prefs.gamepadMouse),
       m_SwapMouseButtons(prefs.swapMouseButtons),
       m_ReverseScrollDirection(prefs.reverseScrollDirection),
@@ -192,6 +196,12 @@ SdlInputHandler::SdlInputHandler(StreamingPreferences& prefs, int streamWidth, i
     m_GamepadMask = getAttachedGamepadMask();
 
     SDL_zero(m_GamepadState);
+    // Wire each gamepad slot back to its owning handler so the static SDL
+    // timer callbacks (e.g. mouseEmulationTimerCallback) can reach the right
+    // Session/MlcWrapper without a singleton.
+    for (int i = 0; i < MAX_GAMEPADS; i++) {
+        m_GamepadState[i].owningHandler = this;
+    }
     SDL_zero(m_LastTouchDownEvent);
     SDL_zero(m_LastTouchUpEvent);
     SDL_zero(m_TouchDownEvent);
@@ -201,7 +211,7 @@ SdlInputHandler::~SdlInputHandler()
 {
     for (int i = 0; i < MAX_GAMEPADS; i++) {
         if (m_GamepadState[i].mouseEmulationTimer != 0) {
-            Session::get()->notifyMouseEmulationMode(false);
+            m_OwningSession->notifyMouseEmulationMode(false);
             SDL_RemoveTimer(m_GamepadState[i].mouseEmulationTimer);
         }
 #if !SDL_VERSION_ATLEAST(2, 0, 9)
@@ -262,7 +272,7 @@ void SdlInputHandler::raiseAllKeys()
                 (int)m_KeysDown.count());
 
     for (auto keyDown : std::as_const(m_KeysDown)) {
-        LiSendKeyboardEvent(keyDown, KEY_ACTION_UP, 0);
+        m_OwningSession->m_Mlc->sendKeyboardEvent(keyDown, KEY_ACTION_UP, 0);
     }
 
     m_KeysDown.clear();

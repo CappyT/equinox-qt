@@ -1,4 +1,5 @@
 #include "streaming/session.h"
+#include "streaming/MlcWrapper.h"
 
 #include <Limelight.h>
 #include "SDL_compat.h"
@@ -42,7 +43,7 @@ void SdlInputHandler::performSpecialKeyCombo(KeyCombo combo)
     case KeyComboToggleFullScreen:
         SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                     "Detected full-screen toggle combo");
-        Session::s_ActiveSession->toggleFullscreen();
+        m_OwningSession->toggleFullscreen();
 
         // Force raise all keys just be safe across this full-screen/windowed
         // transition just in case key events get lost.
@@ -54,8 +55,8 @@ void SdlInputHandler::performSpecialKeyCombo(KeyCombo combo)
                     "Detected stats toggle combo");
 
         // Toggle the stats overlay
-        Session::get()->getOverlayManager().setOverlayState(Overlay::OverlayDebug,
-                                                            !Session::get()->getOverlayManager().isOverlayEnabled(Overlay::OverlayDebug));
+        m_OwningSession->getOverlayManager().setOverlayState(Overlay::OverlayDebug,
+                                                            !m_OwningSession->getOverlayManager().isOverlayEnabled(Overlay::OverlayDebug));
         break;
 
     case KeyComboToggleMouseMode:
@@ -114,7 +115,7 @@ void SdlInputHandler::performSpecialKeyCombo(KeyCombo combo)
             }
 
             // Send this text to the PC
-            LiSendUtf8TextEvent(text, (unsigned int)strlen(text));
+            m_OwningSession->m_Mlc->sendUtf8TextEvent(text, (unsigned int)strlen(text));
 
             // SDL_GetClipboardText() allocates, so we must free
             SDL_free((void*)text);
@@ -144,7 +145,7 @@ void SdlInputHandler::performSpecialKeyCombo(KeyCombo combo)
                     "Detected quitAndExit key combo");
 
         // Indicate that we want to exit afterwards
-        Session::get()->setShouldExit(true);
+        m_OwningSession->setShouldExit(true);
 
         // Push a quit event to the main loop
         SDL_Event quitExitEvent;
@@ -457,7 +458,7 @@ void SdlInputHandler::handleKeyEvent(SDL_KeyboardEvent* event)
         m_KeysDown.remove(keyCode);
     }
 
-    LiSendKeyboardEvent2(0x8000 | keyCode,
+    m_OwningSession->m_Mlc->sendKeyboardEvent2(0x8000 | keyCode,
                         event->state == SDL_PRESSED ?
                             KEY_ACTION_DOWN : KEY_ACTION_UP,
                         modifiers,

@@ -5,7 +5,15 @@
 
 #include "SDL_compat.h"
 
+class Session;
+class SdlInputHandler;
+
 struct GamepadState {
+    // Back-pointer to the SdlInputHandler that owns this slot. Needed so the
+    // static SDL timer callbacks (mouseEmulationTimerCallback in particular)
+    // can reach the right Session/MlcWrapper without using a singleton.
+    SdlInputHandler* owningHandler;
+
     SDL_GameController* controller;
     SDL_JoystickID jsId;
     short index;
@@ -84,7 +92,9 @@ struct DualSenseOutputReport{
 class SdlInputHandler
 {
 public:
-    explicit SdlInputHandler(StreamingPreferences& prefs, int streamWidth, int streamHeight);
+    explicit SdlInputHandler(Session* owningSession,
+                             StreamingPreferences& prefs,
+                             int streamWidth, int streamHeight);
 
     ~SdlInputHandler();
 
@@ -201,6 +211,12 @@ private:
 
     static
     Uint32 dragTimerCallback(Uint32 interval, void* param);
+
+    // Owning Session for this handler. Not owned. Lifetime is tied to Session.
+    // Used to reach session-level state (overlay, fullscreen toggle, exit
+    // request) and to dispatch Li* calls through the per-session MlcWrapper
+    // instead of the legacy singleton.
+    Session* m_OwningSession;
 
     SDL_Window* m_Window;
     bool m_MultiController;
