@@ -89,6 +89,7 @@ EOF
 read -r
 
 LD_LIBRARY_PATH="$REPO/tests/mlc-wrapper" \
+OPENSSL_CONF=/dev/null \
     gdb -batch \
         -x "$REPO/scripts/debug-equinox-crash.gdb" \
         --args "$REPO/app/moonlight" \
