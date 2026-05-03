@@ -1,11 +1,17 @@
 #include "input.h"
 
+// Bring in the Qt-pulling project headers first so QEvent::None et al. are
+// fully declared before SDL_syswm.h (transitively X11) gets a chance to
+// #define those identifiers as macros.
+#include "streaming/streamutils.h"
+#include "streaming/session.h"
+#include "streaming/MlcWrapper.h"
+
+#include <QtMath>
+
 #include <Limelight.h>
 #include "SDL_compat.h"
 #include <SDL_syswm.h>
-#include "streaming/streamutils.h"
-
-#include <QtMath>
 
 // How long the fingers must be stationary to start a right click
 #define LONG_PRESS_ACTIVATION_DELAY 650
@@ -19,11 +25,13 @@
 // How far the finger can move before it can override the double tap deadzone
 #define DOUBLE_TAP_DEAD_ZONE_DELTA 0.025f
 
-Uint32 SdlInputHandler::longPressTimerCallback(Uint32, void*)
+Uint32 SdlInputHandler::longPressTimerCallback(Uint32, void* param)
 {
+    auto me = reinterpret_cast<SdlInputHandler*>(param);
+
     // Raise the left click and start a right click
-    LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
-    LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
+    me->m_OwningSession->m_Mlc->sendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
+    me->m_OwningSession->m_Mlc->sendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
 
     return 0;
 }
@@ -110,7 +118,7 @@ void SdlInputHandler::handleAbsoluteFingerEvent(SDL_TouchFingerEvent* event)
     }
 
     // Try to send it as a native pen/touch event, otherwise fall back to our touch emulation
-    if (LiGetHostFeatureFlags() & LI_FF_PEN_TOUCH_EVENTS) {
+    if (m_OwningSession->m_Mlc->getHostFeatureFlags() & LI_FF_PEN_TOUCH_EVENTS) {
 #if SDL_VERSION_ATLEAST(2, 0, 22)
         bool isPen = false;
 
@@ -127,13 +135,13 @@ void SdlInputHandler::handleAbsoluteFingerEvent(SDL_TouchFingerEvent* event)
         }
 
         if (isPen) {
-            LiSendPenEvent(eventType, LI_TOOL_TYPE_PEN, 0, vidrelx / dst.w, vidrely / dst.h, event->pressure,
+            m_OwningSession->m_Mlc->sendPenEvent(eventType, LI_TOOL_TYPE_PEN, 0, vidrelx / dst.w, vidrely / dst.h, event->pressure,
                            0.0f, 0.0f, LI_ROT_UNKNOWN, LI_TILT_UNKNOWN);
         }
         else
 #endif
         {
-            LiSendTouchEvent(eventType, pointerId, vidrelx / dst.w, vidrely / dst.h, event->pressure,
+            m_OwningSession->m_Mlc->sendTouchEvent(eventType, pointerId, vidrelx / dst.w, vidrely / dst.h, event->pressure,
                              0.0f, 0.0f, LI_ROT_UNKNOWN);
         }
 
@@ -197,7 +205,7 @@ void SdlInputHandler::emulateAbsoluteFingerEvent(SDL_TouchFingerEvent* event)
         short y = qMin(qMax((int)(event->y * windowHeight), dst.y), dst.y + dst.h);
 
         // Update the cursor position relative to the video region
-        LiSendMousePositionEvent(x - dst.x, y - dst.y, dst.w, dst.h);
+        m_OwningSession->m_Mlc->sendMousePositionEvent(x - dst.x, y - dst.y, dst.w, dst.h);
     }
 
     if (event->type == SDL_FINGERDOWN) {
@@ -207,10 +215,10 @@ void SdlInputHandler::emulateAbsoluteFingerEvent(SDL_TouchFingerEvent* event)
         SDL_RemoveTimer(m_LongPressTimer);
         m_LongPressTimer = SDL_AddTimer(LONG_PRESS_ACTIVATION_DELAY,
                                         longPressTimerCallback,
-                                        nullptr);
+                                        this);
 
         // Left button down on finger down
-        LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
+        m_OwningSession->m_Mlc->sendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
     }
     else if (event->type == SDL_FINGERUP) {
         m_LastTouchUpEvent = *event;
@@ -220,9 +228,9 @@ void SdlInputHandler::emulateAbsoluteFingerEvent(SDL_TouchFingerEvent* event)
         m_LongPressTimer = 0;
 
         // Left button up on finger up
-        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
+        m_OwningSession->m_Mlc->sendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
 
         // Raise right button too in case we triggered a long press gesture
-        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
+        m_OwningSession->m_Mlc->sendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
     }
 }
