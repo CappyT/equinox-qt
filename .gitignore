@@ -6,3 +6,8 @@
 build/
 config.tests/*/.qmake.stash
 config.tests/*/Makefile
+
+# === Equinox additions (everything below is downstream-only) ===
+# Local planning / brainstorming docs not meant for upstream PRs
+/handoff-claude-code.md
+/dual-stream-moonlight-project (equinox).md
